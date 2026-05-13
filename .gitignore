@@ -1,0 +1,30 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+
+# Local Env Files
+.env
+.env*.local
+backend/.env
+website/.env
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+out/

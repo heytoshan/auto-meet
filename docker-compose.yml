@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: automeet-postgres
+    environment:
+      POSTGRES_DB: automeet
+      POSTGRES_USER: automeet_user
+      POSTGRES_PASSWORD: automeet_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - automeet-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U automeet_user -d automeet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: automeet-backend
+    environment:
+      - DATABASE_URL=postgresql://automeet_user:automeet_password@postgres:5432/automeet
+      - JWT_SECRET=${JWT_SECRET:-your_jwt_secret_here_change_this}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - PORT=3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - automeet-network
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: sh -c "npx drizzle-kit migrate && npm run dev"
+
+  # Frontend
+  frontend:
+    build:
+      context: ./website
+      dockerfile: Dockerfile
+    container_name: automeet-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - automeet-network
+    volumes:
+      - ./website:/app
+      - /app/node_modules
+    command: sh -c "npm run dev -- --host 0.0.0.0"
+
+  # Meeting Handler
+  meeting-handler:
+    build:
+      context: ./google-meet-record-handle
+      dockerfile: Dockerfile
+    container_name: automeet-meeting-handler
+    environment:
+      - GMAIL_USER_EMAIL=${GMAIL_USER_EMAIL}
+      - GMAIL_USER_PASSWORD=${GMAIL_USER_PASSWORD}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+      - BACKEND_URL=http://backend:3000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DURATION_IN_MINUTES=${DURATION_IN_MINUTES:-15}
+      - MAX_WAITING_TIME_IN_MINUTES=${MAX_WAITING_TIME_IN_MINUTES:-5}
+    ports:
+      - "5000:5000"
+    depends_on:
+      - backend
+    networks:
+      - automeet-network
+    volumes:
+      - meeting_recordings:/app/recordings
+      - meeting_screenshots:/app/screenshots
+      - meeting_audios:/app/audios
+      - meeting_transcripts:/app/transcripts
+      - meeting_summaries:/app/summaries
+    privileged: true
+    devices:
+      - /dev/snd:/dev/snd
+    environment:
+      - DISPLAY=:1
+    command: >
+      sh -c "
+        Xvfb :1 -screen 0 1920x1080x24 &
+        sleep 5 &&
+        /app/entrypoint.sh
+      "
+
+volumes:
+  postgres_data:
+  meeting_recordings:
+  meeting_screenshots:
+  meeting_audios:
+  meeting_transcripts:
+  meeting_summaries:
+
+networks:
+  automeet-network:
+    driver: bridge
