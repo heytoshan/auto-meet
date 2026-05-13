@@ -17,11 +17,17 @@ node_modules/
 *.sw?
 .DS_Store
 
-# Local Env Files
-.env
-.env*.local
-backend/.env
-website/.env
+# Local Env Files and Secrets
+*.env
+*.env.*
+.env*
+docker.env
+**/*.env
+**/*.env*
+!.env.example
+!docker.env.example
+
+
 
 # Build outputs
 dist/
